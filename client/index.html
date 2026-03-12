@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PulseWire | Technology News Aggregator</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="top-ribbon">
+      <div class="top-ribbon__inner">
+        <span>Technology news aggregator</span>
+        <span id="feedStatus">Loading feeds...</span>
+      </div>
+    </header>
+
+    <div class="page-shell">
+      <header class="hero-header">
+        <div class="hero-branding">
+          <p class="eyebrow">Latest from the feed</p>
+          <div class="masthead-row">
+            <h1>PulseWire</h1>
+            <span class="masthead-tag">Tech</span>
+          </div>
+          <p class="hero-copy">
+            Curated live coverage from leading technology publications, bringing the biggest stories in AI, devices, software, startups, and digital culture into one fast front page.
+          </p>
+        </div>
+
+        <div class="hero-tools">
+          <label class="search-bar" for="searchInput">
+            <span>Search headlines and summaries</span>
+            <input id="searchInput" type="search" placeholder="AI, Apple, cybersecurity, startups..." />
+          </label>
+          <button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle theme">
+            <span class="theme-toggle__label">Night edition</span>
+          </button>
+        </div>
+      </header>
+
+      <main class="layout">
+        <aside class="sidebar">
+          <section class="sidebar-panel">
+            <div class="section-head section-head--stacked">
+              <h2>Sources</h2>
+              <button id="clearFilterBtn" class="text-button" type="button">Reset</button>
+            </div>
+            <div id="sourceFilters" class="filter-list"></div>
+          </section>
+
+          <section class="sidebar-panel sidebar-panel--subtle">
+            <p class="eyebrow">Coverage</p>
+            <p id="resultsMeta" class="results-meta"></p>
+            <p id="footerSources" class="source-rollup"></p>
+          </section>
+        </aside>
+
+        <section class="content">
+          <div class="content-head">
+            <div>
+              <p class="eyebrow">Front page</p>
+              <h2 id="resultsTitle">Top stories</h2>
+            </div>
+          </div>
+
+          <div id="loadingState" class="state-card">Fetching the latest articles...</div>
+          <div id="emptyState" class="state-card hidden">No articles match your search or source filter.</div>
+          <div id="newsGrid" class="news-grid"></div>
+          <div id="scrollSentinel" class="scroll-sentinel" aria-hidden="true"></div>
+          <div id="endState" class="end-state hidden">All done. You’ve reached the end of the feed.</div>
+        </section>
+      </main>
+
+      <footer class="site-footer">
+        <p>Built locally with Node.js, Express, RSS Parser, and vanilla JavaScript.</p>
+      </footer>
+    </div>
+
+    <template id="articleCardTemplate">
+      <article class="news-card">
+        <div class="news-card__image-wrap">
+          <img class="news-card__image" alt="" loading="lazy" />
+          <div class="news-card__source-badge"></div>
+        </div>
+        <div class="news-card__body">
+          <p class="news-card__meta"></p>
+          <h3 class="news-card__title"></h3>
+          <p class="news-card__description"></p>
+          <a class="news-card__link" target="_blank" rel="noopener noreferrer">Read story</a>
+        </div>
+      </article>
+    </template>
+
+    <script src="script.js"></script>
+  </body>
+</html>
+

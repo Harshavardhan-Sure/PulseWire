@@ -29,22 +29,21 @@
         </div>
 
         <div class="hero-tools">
-          <label class="search-bar" for="searchInput">
+          <div class="hero-actions hero-actions--icons">
+            <button id="searchToggleBtn" class="theme-toggle icon-button icon-button--hero secondary-action" type="button" aria-label="Search stories" title="Search stories"></button>
+            <button id="refreshFeedsBtn" class="theme-toggle icon-button icon-button--hero secondary-action" type="button" aria-label="Refresh feeds" title="Refresh feeds"></button>
+            <button id="savedBtn" class="theme-toggle icon-button icon-button--hero secondary-action" type="button" aria-label="Saved stories" title="Saved stories"></button>
+            <button id="diagnosticsBtn" class="theme-toggle icon-button icon-button--hero secondary-action" type="button" aria-label="Feed details" title="Feed details"></button>
+            <button id="settingsBtn" class="theme-toggle icon-button icon-button--hero secondary-action" type="button" aria-label="Settings" title="Settings"></button>
+            <button id="themeToggle" class="theme-toggle icon-button icon-button--hero" type="button" aria-label="Toggle theme" title="Toggle theme"></button>
+          </div>
+          <label id="searchPanel" class="search-bar hidden" for="searchInput">
             <span>Search headlines and summaries</span>
             <input id="searchInput" type="search" placeholder="AI, Apple, cybersecurity, startups..." />
           </label>
-          <div class="hero-actions">
-            <button id="refreshFeedsBtn" class="theme-toggle secondary-action" type="button">Refresh feeds</button>
-            <button id="savedBtn" class="theme-toggle secondary-action" type="button">Saved (0)</button>
-            <button id="settingsBtn" class="theme-toggle secondary-action" type="button">Settings</button>
-            <button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle theme">
-              <span class="theme-toggle__label">Night edition</span>
-            </button>
-          </div>
         </div>
       </header>
 
-      <section id="diagnosticsBar" class="diagnostics-bar"></section>
 
       <section id="settingsPanel" class="settings-panel hidden">
         <div class="settings-grid">
@@ -81,7 +80,7 @@
           <section class="sidebar-panel">
             <div class="section-head section-head--stacked">
               <h2>Sources</h2>
-              <button id="clearFilterBtn" class="text-button" type="button">Reset</button>
+              <button id="clearFilterBtn" class="text-button icon-button" type="button" aria-label="Reset filters" title="Reset filters"></button>
             </div>
             <div id="sourceFilters" class="filter-list"></div>
           </section>
@@ -95,7 +94,7 @@
                 <h2>Top latest</h2>
               </div>
               <div class="inline-actions">
-                <button id="openFeaturedBtn" class="text-button" type="button">Open all featured</button>
+                <button id="openFeaturedBtn" class="text-button icon-button" type="button" aria-label="Open all featured stories" title="Open all featured stories"></button>
               </div>
             </div>
             <div id="featuredGrid" class="featured-grid"></div>
@@ -118,7 +117,7 @@
                 <h2 id="resultsTitle">Top stories</h2>
               </div>
               <div class="inline-actions">
-                <button id="scrollTopBtn" class="text-button" type="button">Back to top</button>
+                <button id="scrollTopBtn" class="text-button icon-button" type="button" aria-label="Back to top" title="Back to top"></button>
               </div>
             </div>
 
@@ -137,11 +136,11 @@
       </footer>
     </div>
 
-    <button id="backToTopBtn" class="back-to-top hidden" type="button">Back to top</button>
+    <button id="backToTopBtn" class="back-to-top hidden icon-button" type="button" aria-label="Back to top" title="Back to top"></button>
 
     <div id="modalOverlay" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
       <div class="modal-card">
-        <button id="modalCloseBtn" class="modal-close" type="button">Close</button>
+        <button id="modalCloseBtn" class="modal-close icon-button" type="button" aria-label="Close" title="Close"></button>
         <div id="modalContent"></div>
       </div>
     </div>
@@ -189,4 +188,7 @@
     <script src="script.js"></script>
   </body>
 </html>
+
+
+
 

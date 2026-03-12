@@ -74,12 +74,13 @@ const elements = {
   featuredGrid: document.getElementById("featuredGrid"),
   featuredSection: document.getElementById("featuredSection"),
   trendingTopics: document.getElementById("trendingTopics"),
-  diagnosticsBar: document.getElementById("diagnosticsBar"),
   loadingState: document.getElementById("loadingState"),
   skeletonGrid: document.getElementById("skeletonGrid"),
   emptyState: document.getElementById("emptyState"),
   endState: document.getElementById("endState"),
   scrollSentinel: document.getElementById("scrollSentinel"),
+  searchToggleBtn: document.getElementById("searchToggleBtn"),
+  searchPanel: document.getElementById("searchPanel"),
   searchInput: document.getElementById("searchInput"),
   sourceFilters: document.getElementById("sourceFilters"),
   clearFilterBtn: document.getElementById("clearFilterBtn"),
@@ -90,6 +91,7 @@ const elements = {
   settingsBtn: document.getElementById("settingsBtn"),
   settingsPanel: document.getElementById("settingsPanel"),
   savedBtn: document.getElementById("savedBtn"),
+  diagnosticsBtn: document.getElementById("diagnosticsBtn"),
   sortSelect: document.getElementById("sortSelect"),
   cardsPerBatchSelect: document.getElementById("cardsPerBatchSelect"),
   stickySidebarToggle: document.getElementById("stickySidebarToggle"),
@@ -212,15 +214,37 @@ function articleMeta(article) {
 function iconMarkup(name) {
   switch (name) {
     case "preview":
-      return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1.5 12s3.8-6.5 10.5-6.5S22.5 12 22.5 12s-3.8 6.5-10.5 6.5S1.5 12 1.5 12Z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
+      return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.8-6 10-6 10 6 10 6-3.8 6-10 6-10-6-10-6Z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
     case "save":
-      return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h12a1 1 0 0 1 1 1v16l-7-4-7 4v-16a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>';
+      return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.5h10a1.5 1.5 0 0 1 1.5 1.5v15.2L12 16.5l-6.5 3.7V5A1.5 1.5 0 0 1 7 3.5Z" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
     case "saved":
-      return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h12a1 1 0 0 1 1 1v16l-7-4-7 4v-16a1 1 0 0 1 1-1Z" fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>';
+      return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.5h10a1.5 1.5 0 0 1 1.5 1.5v15.2L12 16.5l-6.5 3.7V5A1.5 1.5 0 0 1 7 3.5Z" fill="currentColor" stroke="currentColor" stroke-width="1.5"/></svg>';
     case "hide":
-      return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M10.6 5.7A11.5 11.5 0 0 1 12 5.5c6.7 0 10.5 6.5 10.5 6.5a18.2 18.2 0 0 1-4 4.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M6.2 7.3A18.8 18.8 0 0 0 1.5 12S5.3 18.5 12 18.5c1.5 0 2.8-.3 4-.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M9.9 9.9A3.2 3.2 0 0 0 12 15.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+      return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10.6 5.8A11.8 11.8 0 0 1 12 5.7c6.1 0 9.9 6.3 9.9 6.3a17.9 17.9 0 0 1-3.8 4.3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M6.1 7.4A18.2 18.2 0 0 0 2.1 12s3.8 6.3 9.9 6.3c1.3 0 2.6-.2 3.7-.7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 10a3.2 3.2 0 0 0 4 4" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
     case "show":
-      return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1.5 12s3.8-6.5 10.5-6.5S22.5 12 22.5 12s-3.8 6.5-10.5 6.5S1.5 12 1.5 12Z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
+      return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.8-6 10-6 10 6 10 6-3.8 6-10 6-10-6-10-6Z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
+    case "search":
+      return '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.8" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M15 15l5.2 5.2" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
+    case "refresh":
+      return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 5.5v5h-5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 10.5A7.5 7.5 0 1 0 20 13.4" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
+    case "saved-list":
+      return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.5h10a1.5 1.5 0 0 1 1.5 1.5v15.2L12 16.5l-6.5 3.7V5A1.5 1.5 0 0 1 7 3.5Z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9 8.2h6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
+    case "diagnostics":
+      return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19V9M12 19V5M19 19v-8" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="5" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="3" r="2" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="19" cy="9" r="2" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
+    case "settings":
+      return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 3.8h4l.7 2.4 2.4 1.1 2.3-1.1 2 3.5-1.8 1.8.2 1.4-.2 1.4 1.8 1.8-2 3.5-2.3-1.1-2.4 1.1-.7 2.4h-4l-.7-2.4-2.4-1.1-2.3 1.1-2-3.5 1.8-1.8-.2-1.4.2-1.4-1.8-1.8 2-3.5 2.3 1.1 2.4-1.1.7-2.4Z" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="12" cy="12" r="3.1" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
+    case "sun":
+      return '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2.5v2.5M12 19v2.5M21.5 12H19M5 12H2.5M18.7 5.3l-1.8 1.8M7.1 16.9l-1.8 1.8M18.7 18.7l-1.8-1.8M7.1 7.1 5.3 5.3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
+    case "moon":
+      return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.5 14.6A7.7 7.7 0 0 1 9.4 5.5a8.6 8.6 0 1 0 9.1 9.1Z" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
+    case "reset":
+      return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 4.5V9h4.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5 9a7 7 0 1 1-1 3.6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
+    case "launch":
+      return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 14 19 5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
+    case "up":
+      return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 18V6" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M6.5 11.5 12 6l5.5 5.5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
+    case "close":
+      return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
     default:
       return "";
   }
@@ -276,7 +300,20 @@ function syncUrl() {
 }
 
 function setThemeLabel(theme) {
-  elements.themeToggle.querySelector(".theme-toggle__label").textContent = theme === "night" ? "Day edition" : "Night edition";
+  setIconButton(elements.themeToggle, theme === "night" ? "sun" : "moon", theme === "night" ? "Day edition" : "Night edition");
+}
+
+function updateControlButtons() {
+  setIconButton(elements.searchToggleBtn, "search", "Search stories");
+  setIconButton(elements.refreshFeedsBtn, "refresh", "Refresh feeds");
+  setIconButton(elements.savedBtn, "saved-list", "Saved stories");
+  setIconButton(elements.diagnosticsBtn, "diagnostics", "Feed details");
+  setIconButton(elements.settingsBtn, "settings", "Settings");
+  setIconButton(elements.clearFilterBtn, "reset", "Reset filters");
+  setIconButton(elements.openFeaturedBtn, "launch", "Open all featured stories");
+  setIconButton(elements.scrollTopBtn, "up", "Back to top");
+  setIconButton(elements.backToTopBtn, "up", "Back to top");
+  setIconButton(elements.modalCloseBtn, "close", "Close");
 }
 
 function applySettingsToUi() {
@@ -286,7 +323,7 @@ function applySettingsToUi() {
   elements.showFeaturedToggle.checked = state.settings.showFeatured;
   document.body.classList.toggle("no-sticky-sidebar", !state.settings.stickySidebar);
   elements.featuredSection.classList.toggle("hidden", !state.settings.showFeatured);
-  elements.savedBtn.textContent = `Saved (${state.savedArticles.length})`;
+  updateControlButtons();
 }
 
 function scrollPageToTop() {
@@ -306,6 +343,15 @@ function isSaved(articleId) {
   return state.savedArticles.some((article) => article.id === articleId);
 }
 
+function syncSaveButtons(articleId = null) {
+  const selector = articleId ? `[data-article-id="${articleId}"]` : "[data-article-id]";
+  document.querySelectorAll(selector).forEach((button) => {
+    const buttonArticleId = button.dataset.articleId;
+    const saved = isSaved(buttonArticleId);
+    setIconButton(button, saved ? "saved" : "save", saved ? "Saved" : "Save story");
+  });
+}
+
 function toggleSaveArticle(article) {
   state.savedArticles = isSaved(article.id)
     ? state.savedArticles.filter((saved) => saved.id !== article.id)
@@ -313,7 +359,11 @@ function toggleSaveArticle(article) {
 
   saveState();
   applySettingsToUi();
-  renderCurrentView();
+  syncSaveButtons(article.id);
+
+  if (!elements.modalOverlay.classList.contains("hidden") && elements.modalContent.querySelector(".saved-list")) {
+    openSavedModal();
+  }
 }
 
 function sortArticles(articles) {
@@ -410,6 +460,7 @@ function buildCard(template, article, config) {
   description.innerHTML = highlightText(article.description || "Open the story to read the full article.", state.searchTerm);
   setIconButton(previewBtn, "preview", "Preview story");
   previewBtn.addEventListener("click", () => openArticleModal(article));
+  saveBtn.dataset.articleId = article.id;
   setIconButton(saveBtn, isSaved(article.id) ? "saved" : "save", isSaved(article.id) ? "Saved" : "Save story");
   saveBtn.addEventListener("click", () => toggleSaveArticle(article));
   link.href = article.link;
@@ -537,20 +588,29 @@ function renderTrendingTopics() {
   });
 }
 
-function renderDiagnostics() {
+function diagnosticsMarkup() {
   const activeSources = state.knownSources.length - state.hiddenSources.length - state.failedSources.length;
-  setContainerHtml(
-    elements.diagnosticsBar,
-    [
-      [getVisibleArticles().length, "loaded"],
-      [activeSources, "active sources"],
-      [state.failedSources.length, "failed"],
-      [state.fetchedAt ? formatRelativeTime(state.fetchedAt) : "-", "last refresh"],
-      [state.hiddenSources.length, "hidden sources"]
-    ]
-      .map(([value, label]) => `<div class="diagnostic-pill"><strong>${value}</strong><span>${label}</span></div>`)
-      .join("")
-  );
+  const items = [
+    [getVisibleArticles().length, "Loaded"],
+    [activeSources, "Active sources"],
+    [state.failedSources.length, "Failed"],
+    [state.fetchedAt ? formatRelativeTime(state.fetchedAt) : "-", "Last refresh"],
+    [state.hiddenSources.length, "Hidden sources"]
+  ];
+
+  return `
+    <section>
+      <p class="eyebrow">Feed details</p>
+      <h2 id="modalTitle">Coverage snapshot</h2>
+      <div class="diagnostics-grid">
+        ${items.map(([value, label]) => `<div class="diagnostic-pill"><strong>${value}</strong><span>${label}</span></div>`).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function openDiagnosticsModal() {
+  openModal(diagnosticsMarkup());
 }
 
 function renderCardCollection(container, articles, createCard) {
@@ -570,11 +630,10 @@ function renderCurrentView() {
   elements.featuredSection.classList.toggle("hidden", !state.settings.showFeatured || featuredArticles.length === 0);
   elements.emptyState.classList.toggle("hidden", filteredArticles.length !== 0);
   elements.resultsTitle.textContent = state.selectedSource === "All" ? "Top stories" : `${state.selectedSource} stories`;
-  elements.savedBtn.textContent = `Saved (${state.savedArticles.length})`;
 
   renderSourceFilters();
   renderTrendingTopics();
-  renderDiagnostics();
+
 }
 
 function buildApiUrl({ page = state.page, refresh = false } = {}) {
@@ -698,6 +757,15 @@ function resetAndReload({ refresh = false } = {}) {
   loadNews({ refresh });
 }
 
+function toggleSearchPanel(forceOpen = null) {
+  const shouldOpen = forceOpen ?? elements.searchPanel.classList.contains("hidden");
+  elements.searchPanel.classList.toggle("hidden", !shouldOpen);
+  elements.searchToggleBtn.classList.toggle("is-active", shouldOpen);
+  if (shouldOpen) {
+    elements.searchInput.focus();
+  }
+}
+
 function openModal(markup) {
   elements.modalContent.innerHTML = markup;
   elements.modalOverlay.classList.remove("hidden");
@@ -714,7 +782,7 @@ function openArticleModal(article) {
       <p class="modal-source">${renderSourceIcon(article.source)}<span>${escapeHtml(article.source)}</span></p>
       <p class="modal-description">${escapeHtml(article.description || "Open the article to read the full story.")}</p>
       <div class="modal-actions">
-        <button id="modalSaveBtn" class="text-button icon-button" type="button" aria-label="${isSaved(article.id) ? "Saved" : "Save for later"}" title="${isSaved(article.id) ? "Saved" : "Save for later"}">${iconMarkup(isSaved(article.id) ? "saved" : "save")}</button>
+        <button id="modalSaveBtn" class="text-button icon-button" type="button" data-article-id="${article.id}" aria-label="${isSaved(article.id) ? "Saved" : "Save for later"}" title="${isSaved(article.id) ? "Saved" : "Save for later"}">${iconMarkup(isSaved(article.id) ? "saved" : "save")}</button>
         <a class="news-card__link" href="${article.link}" target="_blank" rel="noopener noreferrer">Open original</a>
       </div>
     </article>
@@ -726,6 +794,36 @@ function openArticleModal(article) {
   });
 }
 
+function openFeaturedModal() {
+  const featuredArticles = getVisibleFeatured();
+  const content = featuredArticles.length
+    ? featuredArticles
+        .map(
+          (article) => `<div class="saved-row"><button class="saved-open" data-id="${escapeHtml(article.id)}" type="button">${escapeHtml(article.title)}</button><a class="text-button saved-remove" href="${article.link}" target="_blank" rel="noopener noreferrer">Open</a></div>`
+        )
+        .join("")
+    : '<p class="state-inline">No featured stories available right now.</p>';
+
+  openModal(`
+    <section>
+      <p class="eyebrow">Featured</p>
+      <div class="saved-header">
+        <h2 id="modalTitle">Featured stories</h2>
+        <span class="saved-count-pill">${featuredArticles.length}</span>
+      </div>
+      <div class="saved-list">${content}</div>
+    </section>
+  `);
+
+  elements.modalContent.querySelectorAll(".saved-open").forEach((button) => {
+    button.addEventListener("click", () => {
+      const article = featuredArticles.find((entry) => entry.id === button.dataset.id);
+      if (article) {
+        openArticleModal(article);
+      }
+    });
+  });
+}
 function openSavedModal() {
   const content = state.savedArticles.length
     ? state.savedArticles
@@ -739,7 +837,10 @@ function openSavedModal() {
   openModal(`
     <section>
       <p class="eyebrow">Read later</p>
-      <h2 id="modalTitle">Saved stories</h2>
+      <div class="saved-header">
+        <h2 id="modalTitle">Saved stories</h2>
+        <span class="saved-count-pill">${state.savedArticles.length}</span>
+      </div>
       <div class="saved-list">${content}</div>
     </section>
   `);
@@ -798,10 +899,13 @@ elements.searchInput.addEventListener("input", (event) => {
   searchTimer = setTimeout(() => resetAndReload(), 250);
 });
 
+elements.searchToggleBtn.addEventListener("click", () => toggleSearchPanel());
+
 elements.clearFilterBtn.addEventListener("click", () => {
   state.selectedSource = "All";
   state.searchTerm = "";
   elements.searchInput.value = "";
+  toggleSearchPanel(false);
   resetAndReload();
 });
 
@@ -823,12 +927,11 @@ elements.refreshFeedsBtn.addEventListener("click", async () => {
 });
 
 elements.savedBtn.addEventListener("click", openSavedModal);
+elements.diagnosticsBtn.addEventListener("click", openDiagnosticsModal);
 elements.settingsBtn.addEventListener("click", () => elements.settingsPanel.classList.toggle("hidden"));
 bindScrollToTop(elements.backToTopBtn);
 bindScrollToTop(elements.scrollTopBtn);
-elements.openFeaturedBtn.addEventListener("click", () => {
-  getVisibleFeatured().forEach((article) => window.open(article.link, "_blank", "noopener"));
-});
+elements.openFeaturedBtn.addEventListener("click", openFeaturedModal);
 elements.modalCloseBtn.addEventListener("click", closeModal);
 elements.modalOverlay.addEventListener("click", (event) => {
   if (event.target === elements.modalOverlay) {
@@ -893,10 +996,29 @@ window.addEventListener("keydown", (event) => {
 
 loadPersistedState();
 applySettingsToUi();
+updateControlButtons();
 applyTheme(localStorage.getItem("pulsewire-theme") === "night" ? "night" : "light");
 hydrateFromUrl();
+if (state.searchTerm) {
+  toggleSearchPanel(true);
+}
 observer.observe(elements.scrollSentinel);
 hydratePagedState();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

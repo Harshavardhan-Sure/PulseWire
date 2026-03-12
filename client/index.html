@@ -23,7 +23,8 @@
             <span class="masthead-tag">Tech</span>
           </div>
           <p class="hero-copy">
-            Curated live coverage from leading technology publications, bringing the biggest stories in AI, devices, software, startups, and digital culture into one fast front page.
+            Curated live coverage from leading technology publications, bringing the biggest stories in AI,
+            devices, software, startups, and digital culture into one fast front page.
           </p>
         </div>
 
@@ -32,11 +33,48 @@
             <span>Search headlines and summaries</span>
             <input id="searchInput" type="search" placeholder="AI, Apple, cybersecurity, startups..." />
           </label>
-          <button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle theme">
-            <span class="theme-toggle__label">Night edition</span>
-          </button>
+          <div class="hero-actions">
+            <button id="refreshFeedsBtn" class="theme-toggle secondary-action" type="button">Refresh feeds</button>
+            <button id="savedBtn" class="theme-toggle secondary-action" type="button">Saved (0)</button>
+            <button id="settingsBtn" class="theme-toggle secondary-action" type="button">Settings</button>
+            <button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle theme">
+              <span class="theme-toggle__label">Night edition</span>
+            </button>
+          </div>
         </div>
       </header>
+
+      <section id="diagnosticsBar" class="diagnostics-bar"></section>
+
+      <section id="settingsPanel" class="settings-panel hidden">
+        <div class="settings-grid">
+          <label>
+            <span>Sort stories</span>
+            <select id="sortSelect">
+              <option value="newest">Newest</option>
+              <option value="source">Source A-Z</option>
+              <option value="duplicated">Most duplicated</option>
+            </select>
+          </label>
+          <label>
+            <span>Cards per batch</span>
+            <select id="cardsPerBatchSelect">
+              <option value="12">12</option>
+              <option value="18">18</option>
+              <option value="24">24</option>
+              <option value="30">30</option>
+            </select>
+          </label>
+          <label class="setting-toggle">
+            <input id="stickySidebarToggle" type="checkbox" />
+            <span>Sticky sidebar</span>
+          </label>
+          <label class="setting-toggle">
+            <input id="showFeaturedToggle" type="checkbox" />
+            <span>Show featured</span>
+          </label>
+        </div>
+      </section>
 
       <main class="layout">
         <aside class="sidebar">
@@ -47,27 +85,50 @@
             </div>
             <div id="sourceFilters" class="filter-list"></div>
           </section>
-
-          <section class="sidebar-panel sidebar-panel--subtle">
-            <p class="eyebrow">Coverage</p>
-            <p id="resultsMeta" class="results-meta"></p>
-            <p id="footerSources" class="source-rollup"></p>
-          </section>
         </aside>
 
         <section class="content">
-          <div class="content-head">
-            <div>
-              <p class="eyebrow">Front page</p>
-              <h2 id="resultsTitle">Top stories</h2>
+          <section id="featuredSection" class="featured-section">
+            <div class="content-head content-head--actions">
+              <div>
+                <p class="eyebrow">Featured</p>
+                <h2>Top latest</h2>
+              </div>
+              <div class="inline-actions">
+                <button id="openFeaturedBtn" class="text-button" type="button">Open all featured</button>
+              </div>
             </div>
-          </div>
+            <div id="featuredGrid" class="featured-grid"></div>
+          </section>
 
-          <div id="loadingState" class="state-card">Fetching the latest articles...</div>
-          <div id="emptyState" class="state-card hidden">No articles match your search or source filter.</div>
-          <div id="newsGrid" class="news-grid"></div>
-          <div id="scrollSentinel" class="scroll-sentinel" aria-hidden="true"></div>
-          <div id="endState" class="end-state hidden">All done. You’ve reached the end of the feed.</div>
+          <section class="trending-section">
+            <div class="content-head">
+              <div>
+                <p class="eyebrow">Trends</p>
+                <h2>Trending topics</h2>
+              </div>
+            </div>
+            <div id="trendingTopics" class="trending-topics"></div>
+          </section>
+
+          <section class="feed-section">
+            <div class="content-head content-head--actions">
+              <div>
+                <p class="eyebrow">Front page</p>
+                <h2 id="resultsTitle">Top stories</h2>
+              </div>
+              <div class="inline-actions">
+                <button id="scrollTopBtn" class="text-button" type="button">Back to top</button>
+              </div>
+            </div>
+
+            <div id="loadingState" class="state-card">Fetching the latest articles...</div>
+            <div id="skeletonGrid" class="news-grid skeleton-grid hidden"></div>
+            <div id="emptyState" class="state-card hidden">No articles match your search or source filter.</div>
+            <div id="newsGrid" class="news-grid"></div>
+            <div id="scrollSentinel" class="scroll-sentinel" aria-hidden="true"></div>
+            <div id="endState" class="end-state hidden">All done. You’ve reached the end of the feed.</div>
+          </section>
         </section>
       </main>
 
@@ -76,17 +137,51 @@
       </footer>
     </div>
 
+    <button id="backToTopBtn" class="back-to-top hidden" type="button">Back to top</button>
+
+    <div id="modalOverlay" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-card">
+        <button id="modalCloseBtn" class="modal-close" type="button">Close</button>
+        <div id="modalContent"></div>
+      </div>
+    </div>
+
     <template id="articleCardTemplate">
       <article class="news-card">
         <div class="news-card__image-wrap">
           <img class="news-card__image" alt="" loading="lazy" />
+          <div class="news-card__placeholder hidden"></div>
           <div class="news-card__source-badge"></div>
         </div>
         <div class="news-card__body">
           <p class="news-card__meta"></p>
           <h3 class="news-card__title"></h3>
           <p class="news-card__description"></p>
-          <a class="news-card__link" target="_blank" rel="noopener noreferrer">Read story</a>
+          <div class="card-actions">
+            <button class="text-button icon-button card-preview-btn" type="button" aria-label="Preview story" title="Preview story"></button>
+            <button class="text-button icon-button card-save-btn" type="button" aria-label="Save story" title="Save story"></button>
+            <a class="news-card__link" target="_blank" rel="noopener noreferrer">Read story</a>
+          </div>
+        </div>
+      </article>
+    </template>
+
+    <template id="featuredCardTemplate">
+      <article class="featured-card">
+        <div class="featured-card__media">
+          <img class="featured-card__image" alt="" loading="lazy" />
+          <div class="featured-card__placeholder hidden"></div>
+          <div class="featured-card__badge"></div>
+        </div>
+        <div class="featured-card__body">
+          <p class="featured-card__meta"></p>
+          <h3 class="featured-card__title"></h3>
+          <p class="featured-card__description"></p>
+          <div class="card-actions">
+            <button class="text-button icon-button featured-preview-btn" type="button" aria-label="Preview story" title="Preview story"></button>
+            <button class="text-button icon-button featured-save-btn" type="button" aria-label="Save story" title="Save story"></button>
+            <a class="news-card__link" target="_blank" rel="noopener noreferrer">Read story</a>
+          </div>
         </div>
       </article>
     </template>

@@ -18,6 +18,7 @@ const parser = new Parser({
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const IMAGE_FALLBACK_LIMIT = 24;
+const FEATURED_LIMIT = 4;
 
 const RSS_SOURCES = [
   { name: "TechCrunch", url: "https://techcrunch.com/feed" },
@@ -26,7 +27,7 @@ const RSS_SOURCES = [
   { name: "Ars Technica", url: "https://feeds.arstechnica.com/arstechnica/index" },
   { name: "Hacker News", url: "https://news.ycombinator.com/rss" },
   { name: "BBC Technology", url: "http://feeds.bbci.co.uk/news/technology/rss.xml" },
-  { name: "Gadgets 360", url: "https://www.gadgets360.com/rss/feeds" },
+  { name: "Gadgets 360", url: "https://www.gadgets360.com/rss/feeds", fallbackUrl: "https://www.gadgets360.com/news" },
   { name: "Beebom", url: "https://beebom.com/feed/" },
   { name: "Android Police", url: "https://www.androidpolice.com/feed/" },
   { name: "How-To Geek", url: "https://www.howtogeek.com/feed/" },
@@ -41,7 +42,8 @@ const RSS_SOURCES = [
 
 const cache = {
   articles: [],
-  fetchedAt: 0
+  fetchedAt: 0,
+  failedSources: []
 };
 
 function stripHtml(value = "") {
@@ -59,10 +61,105 @@ function truncateText(value = "", maxLength = 180) {
 function firstNonEmpty(values = []) {
   return values.find((value) => typeof value === "string" && value.trim()) || "";
 }
+function toAbsoluteUrl(value, baseUrl) {
+  if (!value) {
+    return "";
+  }
+
+  try {
+    return new URL(value, baseUrl).toString();
+  } catch {
+    return "";
+  }
+}
+
+function flattenJsonLd(node, collection = []) {
+  if (!node) {
+    return collection;
+  }
+
+  if (Array.isArray(node)) {
+    node.forEach((entry) => flattenJsonLd(entry, collection));
+    return collection;
+  }
+
+  if (typeof node !== "object") {
+    return collection;
+  }
+
+  collection.push(node);
+  Object.values(node).forEach((value) => flattenJsonLd(value, collection));
+  return collection;
+}
+
+function parseJsonLdArticles(html, source) {
+  const scripts = Array.from(html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi));
+  const entries = [];
+
+  scripts.forEach((match) => {
+    const raw = match[1]?.trim();
+    if (!raw) {
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(raw);
+      flattenJsonLd(parsed).forEach((node) => {
+        const headline = firstNonEmpty([node.headline, node.name]);
+        const url = toAbsoluteUrl(firstNonEmpty([node.url, node.mainEntityOfPage?.['@id'], node.mainEntityOfPage]), source.fallbackUrl || source.url);
+        const image = Array.isArray(node.image)
+          ? firstNonEmpty(node.image.map((entry) => typeof entry === "string" ? entry : entry?.url))
+          : typeof node.image === "string"
+            ? node.image
+            : node.image?.url;
+
+        if (!headline || !url) {
+          return;
+        }
+
+        entries.push({
+          title: headline,
+          link: url,
+          pubDate: firstNonEmpty([node.datePublished, node.dateCreated, node.dateModified]),
+          description: firstNonEmpty([node.description]),
+          image: toAbsoluteUrl(image, source.fallbackUrl || source.url)
+        });
+      });
+    } catch {
+    }
+  });
+
+  return entries;
+}
+
+function normalizeFallbackArticle(item, sourceName) {
+  return {
+    id: item.link || `${sourceName}-${item.title || Date.now()}`,
+    title: stripHtml(item.title || "Untitled Article"),
+    normalizedTitle: normalizeTitle(item.title || "Untitled Article"),
+    link: item.link || "",
+    source: sourceName,
+    publishedAt: toIsoDate(item.pubDate || Date.now()),
+    description: truncateText(stripHtml(item.description || ""), 220),
+    image: item.image || "",
+    relatedSources: [sourceName],
+    duplicateCount: 0
+  };
+}
 
 function toIsoDate(value) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? new Date(0).toISOString() : date.toISOString();
+}
+
+function normalizeTitle(value = "") {
+  return stripHtml(value)
+    .toLowerCase()
+    .replace(/&#8217;|&#39;/g, "'")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\b(update|live|report|review|hands on|hands on review)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function extractImage(item) {
@@ -89,12 +186,7 @@ function extractImage(item) {
     return directImage;
   }
 
-  const htmlSources = [
-    item.contentEncoded,
-    item.content,
-    item.summary,
-    item.description
-  ].filter(Boolean);
+  const htmlSources = [item.contentEncoded, item.content, item.summary, item.description].filter(Boolean);
 
   for (const value of htmlSources) {
     const html = String(value);
@@ -177,49 +269,105 @@ function normalizeArticle(item, sourceName) {
   const rawDescription = item.contentSnippet || item.summary || item.description || item.contentEncoded || "";
 
   return {
+    id: item.guid || item.id || item.link || `${sourceName}-${item.title || Date.now()}`,
     title: stripHtml(item.title || "Untitled Article"),
+    normalizedTitle: normalizeTitle(item.title || "Untitled Article"),
     link: item.link || "",
     source: sourceName,
     publishedAt: toIsoDate(item.isoDate || item.pubDate || Date.now()),
     description: truncateText(stripHtml(rawDescription), 220),
-    image: extractImage(item)
+    image: extractImage(item),
+    relatedSources: [sourceName],
+    duplicateCount: 0
   };
 }
 
 async function fetchSource(source) {
-  const feed = await parser.parseURL(source.url);
-  const items = Array.isArray(feed.items) ? feed.items : [];
+  try {
+    const feed = await parser.parseURL(source.url);
+    const items = Array.isArray(feed.items) ? feed.items : [];
 
-  return items
-    .map((item) => normalizeArticle(item, source.name))
-    .filter((article) => article.title && article.link);
+    return items
+      .map((item) => normalizeArticle(item, source.name))
+      .filter((article) => article.title && article.link);
+  } catch (error) {
+    if (!source.fallbackUrl) {
+      throw error;
+    }
+
+    const html = await fetchHtml(source.fallbackUrl);
+    const fallbackItems = parseJsonLdArticles(html, source)
+      .map((item) => normalizeFallbackArticle(item, source.name))
+      .filter((article) => article.title && article.link);
+
+    if (fallbackItems.length === 0) {
+      throw error;
+    }
+
+    return fallbackItems;
+  }
 }
 
-async function getAllArticles() {
+function dedupeArticles(articles) {
+  const clusters = new Map();
+
+  for (const article of articles) {
+    const key = article.normalizedTitle || article.title.toLowerCase();
+    const existing = clusters.get(key);
+
+    if (!existing) {
+      clusters.set(key, { ...article });
+      continue;
+    }
+
+    existing.relatedSources = Array.from(new Set([...existing.relatedSources, article.source]));
+    existing.duplicateCount += 1;
+
+    if (new Date(article.publishedAt) > new Date(existing.publishedAt)) {
+      existing.title = article.title;
+      existing.link = article.link;
+      existing.source = article.source;
+      existing.publishedAt = article.publishedAt;
+      existing.description = article.description || existing.description;
+      existing.image = article.image || existing.image;
+      existing.id = article.id;
+    } else if (!existing.image && article.image) {
+      existing.image = article.image;
+    }
+  }
+
+  return Array.from(clusters.values()).sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
+}
+
+async function getAllArticles(forceRefresh = false) {
   const now = Date.now();
 
-  if (cache.articles.length > 0 && now - cache.fetchedAt < CACHE_TTL_MS) {
+  if (!forceRefresh && cache.articles.length > 0 && now - cache.fetchedAt < CACHE_TTL_MS) {
     return {
       articles: cache.articles,
       meta: {
         cached: true,
         fetchedAt: new Date(cache.fetchedAt).toISOString(),
         sources: RSS_SOURCES.map((source) => source.name),
-        failedSources: []
+        failedSources: cache.failedSources
       }
     };
   }
 
   const results = await Promise.allSettled(RSS_SOURCES.map(fetchSource));
-  const articles = results
+  const rawArticles = results
     .filter((result) => result.status === "fulfilled")
     .flatMap((result) => result.value)
     .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
 
+  const articles = dedupeArticles(rawArticles);
   await enrichMissingImages(articles);
 
   cache.articles = articles;
   cache.fetchedAt = now;
+  cache.failedSources = results
+    .map((result, index) => (result.status === "rejected" ? RSS_SOURCES[index].name : null))
+    .filter(Boolean);
 
   return {
     articles,
@@ -227,11 +375,18 @@ async function getAllArticles() {
       cached: false,
       fetchedAt: new Date(cache.fetchedAt).toISOString(),
       sources: RSS_SOURCES.map((source) => source.name),
-      failedSources: results
-        .map((result, index) => (result.status === "rejected" ? RSS_SOURCES[index].name : null))
-        .filter(Boolean)
+      failedSources: cache.failedSources
     }
   };
+}
+
+function countBySource(articles) {
+  return Object.fromEntries(
+    RSS_SOURCES.map((source) => [
+      source.name,
+      articles.filter((article) => article.relatedSources.includes(source.name)).length
+    ])
+  );
 }
 
 function queryArticles(articles, { search = "", source = "All", page = 1, limit = 18 } = {}) {
@@ -240,19 +395,27 @@ function queryArticles(articles, { search = "", source = "All", page = 1, limit 
   const safePage = Math.max(1, Number(page) || 1);
   const safeLimit = Math.min(50, Math.max(1, Number(limit) || 18));
 
-  const filtered = articles.filter((article) => {
-    const matchesSource = !normalizedSource || normalizedSource === "All" || article.source === normalizedSource;
-    const haystack = `${article.title} ${article.description} ${article.source}`.toLowerCase();
-    const matchesSearch = !normalizedSearch || haystack.includes(normalizedSearch);
+  const searched = articles.filter((article) => {
+    const haystack = [article.title, article.description, article.source, article.relatedSources.join(" ")]
+      .join(" ")
+      .toLowerCase();
+    return !normalizedSearch || haystack.includes(normalizedSearch);
+  });
 
-    return matchesSource && matchesSearch;
+  const sourceCounts = countBySource(searched);
+
+  const filtered = searched.filter((article) => {
+    return !normalizedSource || normalizedSource === "All" || article.relatedSources.includes(normalizedSource);
   });
 
   const start = (safePage - 1) * safeLimit;
   const pagedArticles = filtered.slice(start, start + safeLimit);
+  const featuredArticles = filtered.slice(0, FEATURED_LIMIT);
 
   return {
     articles: pagedArticles,
+    featuredArticles,
+    sourceCounts,
     pagination: {
       page: safePage,
       limit: safeLimit,
@@ -264,20 +427,30 @@ function queryArticles(articles, { search = "", source = "All", page = 1, limit 
 }
 
 async function getAggregatedNews(options = {}) {
-  const base = await getAllArticles();
+  const base = await getAllArticles(Boolean(options.forceRefresh));
   const queried = queryArticles(base.articles, options);
 
   return {
     articles: queried.articles,
+    featuredArticles: queried.featuredArticles,
     meta: {
       ...base.meta,
+      sourceCounts: queried.sourceCounts,
       pagination: queried.pagination
     }
   };
 }
 
+function clearCache() {
+  cache.articles = [];
+  cache.fetchedAt = 0;
+  cache.failedSources = [];
+}
+
 module.exports = {
   CACHE_TTL_MS,
   RSS_SOURCES,
-  getAggregatedNews
+  getAggregatedNews,
+  clearCache
 };
+

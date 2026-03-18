@@ -44,7 +44,6 @@
         </div>
       </header>
 
-
       <section id="settingsPanel" class="settings-panel hidden">
         <div class="settings-grid">
           <label>
@@ -81,6 +80,12 @@
             <div class="section-head section-head--stacked">
               <h2>Sources</h2>
               <button id="clearFilterBtn" class="text-button icon-button" type="button" aria-label="Reset filters" title="Reset filters"></button>
+            </div>
+            <div class="mobile-filter-bar">
+              <label class="mobile-filter-select" for="sourceSelect">
+                <span>Filter by source</span>
+                <select id="sourceSelect" aria-label="Filter stories by source"></select>
+              </label>
             </div>
             <div id="sourceFilters" class="filter-list"></div>
           </section>
@@ -188,7 +193,3 @@
     <script src="script.js"></script>
   </body>
 </html>
-
-
-
-

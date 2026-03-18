@@ -83,6 +83,7 @@ const elements = {
   searchPanel: document.getElementById("searchPanel"),
   searchInput: document.getElementById("searchInput"),
   sourceFilters: document.getElementById("sourceFilters"),
+  sourceSelect: document.getElementById("sourceSelect"),
   clearFilterBtn: document.getElementById("clearFilterBtn"),
   themeToggle: document.getElementById("themeToggle"),
   refreshFeedsBtn: document.getElementById("refreshFeedsBtn"),
@@ -543,6 +544,18 @@ function renderSourceRow(source, count, hidden = false) {
   return row;
 }
 
+function renderMobileSourceSelect() {
+  const options = [
+    `<option value="All">All (${getVisibleArticles().length})</option>`, 
+    ...state.knownSources
+      .filter((source) => !state.hiddenSources.includes(source))
+      .map((source) => `<option value="${escapeHtml(source)}">${escapeHtml(source)} (${Number(state.sourceCounts[source] || 0)})</option>`)
+  ];
+
+  elements.sourceSelect.innerHTML = options.join("");
+  elements.sourceSelect.value = options.some((option) => option.includes(`value="${escapeHtml(state.selectedSource)}"`)) ? state.selectedSource : "All";
+}
+
 function renderSourceFilters() {
   elements.sourceFilters.innerHTML = "";
   const fragment = document.createDocumentFragment();
@@ -556,6 +569,7 @@ function renderSourceFilters() {
   });
 
   elements.sourceFilters.appendChild(fragment);
+  renderMobileSourceSelect();
 }
 
 function renderSkeletons() {
@@ -905,8 +919,13 @@ elements.clearFilterBtn.addEventListener("click", () => {
   state.selectedSource = "All";
   state.searchTerm = "";
   elements.searchInput.value = "";
+  elements.sourceSelect.value = "All";
   toggleSearchPanel(false);
   resetAndReload();
+});
+
+elements.sourceSelect.addEventListener("change", (event) => {
+  selectSource(event.target.value || "All");
 });
 
 elements.themeToggle.addEventListener("click", () => {
@@ -1004,6 +1023,9 @@ if (state.searchTerm) {
 }
 observer.observe(elements.scrollSentinel);
 hydratePagedState();
+
+
+
 
 
 

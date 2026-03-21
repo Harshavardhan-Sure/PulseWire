@@ -50,6 +50,14 @@ const cache = {
   sourceDiagnostics: []
 };
 
+const DEFAULT_HEADERS = {
+  "User-Agent": parser.options.requestOptions.headers["User-Agent"],
+  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+  "Accept-Language": "en-US,en;q=0.9",
+  "Cache-Control": "no-cache",
+  "Pragma": "no-cache"
+};
+
 function stripHtml(value = "") {
   return String(value).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
 }
@@ -133,7 +141,18 @@ function extractImage(item) {
   return "";
 }
 
-async function fetchText(url) {
+function decodeHtmlEntities(value = "") {
+  return String(value)
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCharCode(parseInt(code, 16)));
+}
+
+async function fetchText(url, options = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 12000);
 
@@ -141,7 +160,9 @@ async function fetchText(url) {
     const response = await fetch(url, {
       signal: controller.signal,
       headers: {
-        "User-Agent": parser.options.requestOptions.headers["User-Agent"]
+        ...DEFAULT_HEADERS,
+        ...(options.referer ? { Referer: options.referer } : {}),
+        ...(options.headers || {})
       }
     });
 
@@ -237,6 +258,56 @@ function parseJsonLdArticles(html, source) {
   });
 
   return entries;
+}
+
+function parseListingArticles(html, source) {
+  if (!html) {
+    return [];
+  }
+
+  const matches = Array.from(html.matchAll(/<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi));
+  const entries = [];
+  const seen = new Set();
+
+  for (const match of matches) {
+    const link = toAbsoluteUrl(match[1], source.fallbackUrl || source.url);
+    if (!likelyArticleUrl(link, source) || seen.has(link)) {
+      continue;
+    }
+
+    const title = decodeHtmlEntities(stripHtml(match[2] || ""));
+    if (!title || title.length < 20) {
+      continue;
+    }
+
+    seen.add(link);
+    entries.push({
+      title,
+      link,
+      pubDate: "",
+      description: "",
+      image: ""
+    });
+
+    if (entries.length >= 18) {
+      break;
+    }
+  }
+
+  return entries;
+}
+
+function parseFallbackArticles(html, source) {
+  const jsonLdArticles = parseJsonLdArticles(html, source);
+  if (jsonLdArticles.length > 0) {
+    return jsonLdArticles;
+  }
+
+  if (source.name === "Gadgets 360") {
+    return parseListingArticles(html, source);
+  }
+
+  return [];
 }
 
 function normalizeFallbackArticle(item, sourceName) {
@@ -426,8 +497,8 @@ async function fetchSourceBundle(source) {
       throw { source: source.name, message: error.message || "Feed request failed" };
     }
 
-    const html = await fetchText(source.fallbackUrl);
-    const fallbackArticles = parseJsonLdArticles(html, source)
+    const html = await fetchText(source.fallbackUrl, { referer: sourceSiteUrl(source) });
+    const fallbackArticles = parseFallbackArticles(html, source)
       .map((item) => normalizeFallbackArticle(item, source.name))
       .filter((article) => article.title && article.link);
 

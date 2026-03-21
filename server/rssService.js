@@ -19,6 +19,9 @@ const parser = new Parser({
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const IMAGE_FALLBACK_LIMIT = 24;
 const FEATURED_LIMIT = 4;
+const ARCHIVE_ARTICLE_LIMIT = 16;
+const ARCHIVE_MAX_SITEMAPS = 4;
+const ARCHIVE_LOOKBACK_DAYS = 7;
 
 const RSS_SOURCES = [
   { name: "TechCrunch", url: "https://techcrunch.com/feed" },
@@ -43,7 +46,8 @@ const RSS_SOURCES = [
 const cache = {
   articles: [],
   fetchedAt: 0,
-  failedSources: []
+  failedSources: [],
+  sourceDiagnostics: []
 };
 
 function stripHtml(value = "") {
@@ -61,6 +65,7 @@ function truncateText(value = "", maxLength = 180) {
 function firstNonEmpty(values = []) {
   return values.find((value) => typeof value === "string" && value.trim()) || "";
 }
+
 function toAbsoluteUrl(value, baseUrl) {
   if (!value) {
     return "";
@@ -71,80 +76,6 @@ function toAbsoluteUrl(value, baseUrl) {
   } catch {
     return "";
   }
-}
-
-function flattenJsonLd(node, collection = []) {
-  if (!node) {
-    return collection;
-  }
-
-  if (Array.isArray(node)) {
-    node.forEach((entry) => flattenJsonLd(entry, collection));
-    return collection;
-  }
-
-  if (typeof node !== "object") {
-    return collection;
-  }
-
-  collection.push(node);
-  Object.values(node).forEach((value) => flattenJsonLd(value, collection));
-  return collection;
-}
-
-function parseJsonLdArticles(html, source) {
-  const scripts = Array.from(html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi));
-  const entries = [];
-
-  scripts.forEach((match) => {
-    const raw = match[1]?.trim();
-    if (!raw) {
-      return;
-    }
-
-    try {
-      const parsed = JSON.parse(raw);
-      flattenJsonLd(parsed).forEach((node) => {
-        const headline = firstNonEmpty([node.headline, node.name]);
-        const url = toAbsoluteUrl(firstNonEmpty([node.url, node.mainEntityOfPage?.['@id'], node.mainEntityOfPage]), source.fallbackUrl || source.url);
-        const image = Array.isArray(node.image)
-          ? firstNonEmpty(node.image.map((entry) => typeof entry === "string" ? entry : entry?.url))
-          : typeof node.image === "string"
-            ? node.image
-            : node.image?.url;
-
-        if (!headline || !url) {
-          return;
-        }
-
-        entries.push({
-          title: headline,
-          link: url,
-          pubDate: firstNonEmpty([node.datePublished, node.dateCreated, node.dateModified]),
-          description: firstNonEmpty([node.description]),
-          image: toAbsoluteUrl(image, source.fallbackUrl || source.url)
-        });
-      });
-    } catch {
-    }
-  });
-
-  return entries;
-}
-
-function normalizeFallbackArticle(item, sourceName) {
-  return {
-    id: item.link || `${sourceName}-${item.title || Date.now()}`,
-    title: stripHtml(item.title || "Untitled Article"),
-    normalizedTitle: normalizeTitle(item.title || "Untitled Article"),
-    link: item.link || "",
-    source: sourceName,
-    publishedAt: toIsoDate(item.pubDate || Date.now()),
-    description: truncateText(stripHtml(item.description || ""), 220),
-    image: item.image || "",
-    relatedSources: [sourceName],
-    duplicateCount: 0
-  };
 }
 
 function toIsoDate(value) {
@@ -202,9 +133,9 @@ function extractImage(item) {
   return "";
 }
 
-async function fetchHtml(url) {
+async function fetchText(url) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000);
+  const timeout = setTimeout(() => controller.abort(), 12000);
 
   try {
     const response = await fetch(url, {
@@ -249,20 +180,78 @@ function extractImageFromHtml(html) {
   return "";
 }
 
-async function enrichMissingImages(articles) {
-  const candidates = articles.filter((article) => !article.image && article.link).slice(0, IMAGE_FALLBACK_LIMIT);
+function flattenJsonLd(node, collection = []) {
+  if (!node) {
+    return collection;
+  }
 
-  await Promise.all(
-    candidates.map(async (article) => {
-      const html = await fetchHtml(article.link);
-      const image = extractImageFromHtml(html);
-      if (image) {
-        article.image = image;
-      }
-    })
-  );
+  if (Array.isArray(node)) {
+    node.forEach((entry) => flattenJsonLd(entry, collection));
+    return collection;
+  }
 
-  return articles;
+  if (typeof node !== "object") {
+    return collection;
+  }
+
+  collection.push(node);
+  Object.values(node).forEach((value) => flattenJsonLd(value, collection));
+  return collection;
+}
+
+function parseJsonLdArticles(html, source) {
+  const scripts = Array.from(html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi));
+  const entries = [];
+
+  scripts.forEach((match) => {
+    const raw = match[1]?.trim();
+    if (!raw) {
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(raw);
+      flattenJsonLd(parsed).forEach((node) => {
+        const headline = firstNonEmpty([node.headline, node.name]);
+        const url = toAbsoluteUrl(firstNonEmpty([node.url, node.mainEntityOfPage?.["@id"], node.mainEntityOfPage]), source.fallbackUrl || source.url);
+        const image = Array.isArray(node.image)
+          ? firstNonEmpty(node.image.map((entry) => typeof entry === "string" ? entry : entry?.url))
+          : typeof node.image === "string"
+            ? node.image
+            : node.image?.url;
+
+        if (!headline || !url) {
+          return;
+        }
+
+        entries.push({
+          title: headline,
+          link: url,
+          pubDate: firstNonEmpty([node.datePublished, node.dateCreated, node.dateModified]),
+          description: firstNonEmpty([node.description]),
+          image: toAbsoluteUrl(image, source.fallbackUrl || source.url)
+        });
+      });
+    } catch {
+    }
+  });
+
+  return entries;
+}
+
+function normalizeFallbackArticle(item, sourceName) {
+  return {
+    id: item.link || `${sourceName}-${item.title || Date.now()}`,
+    title: stripHtml(item.title || "Untitled Article"),
+    normalizedTitle: normalizeTitle(item.title || "Untitled Article"),
+    link: item.link || "",
+    source: sourceName,
+    publishedAt: toIsoDate(item.pubDate || Date.now()),
+    description: truncateText(stripHtml(item.description || ""), 220),
+    image: item.image || "",
+    relatedSources: [sourceName],
+    duplicateCount: 0
+  };
 }
 
 function normalizeArticle(item, sourceName) {
@@ -282,29 +271,175 @@ function normalizeArticle(item, sourceName) {
   };
 }
 
-async function fetchSource(source) {
+function sourceSiteUrl(source) {
+  try {
+    const url = new URL(source.url);
+    return `${url.protocol}//${url.hostname}`;
+  } catch {
+    return source.url;
+  }
+}
+
+function sitemapCandidatesForSource(source) {
+  const base = sourceSiteUrl(source);
+  return [
+    `${base}/sitemap.xml`,
+    `${base}/sitemap_index.xml`,
+    `${base}/post-sitemap.xml`,
+    `${base}/wp-sitemap-posts-post-1.xml`,
+    `${base}/news-sitemap.xml`
+  ];
+}
+
+function parseSitemap(xml, baseUrl) {
+  const sitemapUrls = Array.from(xml.matchAll(/<sitemap>\s*<loc>(.*?)<\/loc>[\s\S]*?<\/sitemap>/gi)).map((match) => toAbsoluteUrl(match[1], baseUrl)).filter(Boolean);
+  const articleUrls = Array.from(xml.matchAll(/<url>\s*<loc>(.*?)<\/loc>(?:[\s\S]*?<lastmod>(.*?)<\/lastmod>)?[\s\S]*?<\/url>/gi))
+    .map((match) => ({
+      url: toAbsoluteUrl(match[1], baseUrl),
+      lastmod: match[2] ? toIsoDate(match[2]) : ""
+    }))
+    .filter((entry) => entry.url);
+
+  return { sitemapUrls, articleUrls };
+}
+
+function likelyArticleUrl(url, source) {
+  if (!url) {
+    return false;
+  }
+
+  const hostname = new URL(sourceSiteUrl(source)).hostname.replace(/^www\./, "");
+  return url.includes(hostname) && !/\/tag\/|\/author\/|\/category\/|\/topics\/|\/page\//i.test(url);
+}
+
+async function fetchArchiveBackfill(source, existingArticles = []) {
+  const knownLinks = new Set(existingArticles.map((article) => article.link));
+  const lookbackMs = ARCHIVE_LOOKBACK_DAYS * 24 * 60 * 60 * 1000;
+  const now = Date.now();
+  const sitemapQueue = [...sitemapCandidatesForSource(source)];
+  const visited = new Set();
+  const articleCandidates = [];
+
+  while (sitemapQueue.length > 0 && visited.size < ARCHIVE_MAX_SITEMAPS) {
+    const sitemapUrl = sitemapQueue.shift();
+    if (!sitemapUrl || visited.has(sitemapUrl)) {
+      continue;
+    }
+
+    visited.add(sitemapUrl);
+    const xml = await fetchText(sitemapUrl);
+    if (!xml) {
+      continue;
+    }
+
+    const parsed = parseSitemap(xml, sitemapUrl);
+
+    parsed.sitemapUrls.forEach((url) => {
+      if (visited.size + sitemapQueue.length < ARCHIVE_MAX_SITEMAPS) {
+        sitemapQueue.push(url);
+      }
+    });
+
+    parsed.articleUrls.forEach((entry) => {
+      const lastmodMs = entry.lastmod ? new Date(entry.lastmod).getTime() : now;
+      if (Number.isNaN(lastmodMs) || now - lastmodMs > lookbackMs) {
+        return;
+      }
+      if (knownLinks.has(entry.url) || !likelyArticleUrl(entry.url, source)) {
+        return;
+      }
+      articleCandidates.push(entry);
+    });
+  }
+
+  const uniqueCandidates = Array.from(new Map(articleCandidates.map((entry) => [entry.url, entry])).values()).slice(0, ARCHIVE_ARTICLE_LIMIT);
+  const results = [];
+
+  for (const entry of uniqueCandidates) {
+    const html = await fetchText(entry.url);
+    if (!html) {
+      continue;
+    }
+
+    const parsedArticles = parseJsonLdArticles(html, source)
+      .filter((article) => article.link === entry.url || article.link === entry.url.replace(/\/$/, ""))
+      .map((article) => normalizeFallbackArticle({ ...article, pubDate: article.pubDate || entry.lastmod }, source.name));
+
+    if (parsedArticles.length > 0) {
+      results.push(parsedArticles[0]);
+    }
+  }
+
+  return results;
+}
+
+async function enrichMissingImages(articles) {
+  const candidates = articles.filter((article) => !article.image && article.link).slice(0, IMAGE_FALLBACK_LIMIT);
+
+  await Promise.all(
+    candidates.map(async (article) => {
+      const html = await fetchText(article.link);
+      const image = extractImageFromHtml(html);
+      if (image) {
+        article.image = image;
+      }
+    })
+  );
+
+  return articles;
+}
+
+function buildSourceDiagnostic(source, articles, extras = {}) {
+  const sorted = [...articles].sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
+  return {
+    source: source.name,
+    count: sorted.length,
+    newest: sorted[0]?.publishedAt || "",
+    oldest: sorted[sorted.length - 1]?.publishedAt || "",
+    mode: extras.mode || "rss",
+    archiveCount: extras.archiveCount || 0,
+    error: extras.error || ""
+  };
+}
+
+async function fetchSourceBundle(source) {
   try {
     const feed = await parser.parseURL(source.url);
     const items = Array.isArray(feed.items) ? feed.items : [];
-
-    return items
+    const rssArticles = items
       .map((item) => normalizeArticle(item, source.name))
       .filter((article) => article.title && article.link);
+
+    const archiveArticles = await fetchArchiveBackfill(source, rssArticles);
+    const merged = [...rssArticles, ...archiveArticles];
+
+    return {
+      source: source.name,
+      articles: merged,
+      diagnostic: buildSourceDiagnostic(source, merged, {
+        mode: archiveArticles.length > 0 ? "rss+archive" : "rss",
+        archiveCount: archiveArticles.length
+      })
+    };
   } catch (error) {
     if (!source.fallbackUrl) {
-      throw error;
+      throw { source: source.name, message: error.message || "Feed request failed" };
     }
 
-    const html = await fetchHtml(source.fallbackUrl);
-    const fallbackItems = parseJsonLdArticles(html, source)
+    const html = await fetchText(source.fallbackUrl);
+    const fallbackArticles = parseJsonLdArticles(html, source)
       .map((item) => normalizeFallbackArticle(item, source.name))
       .filter((article) => article.title && article.link);
 
-    if (fallbackItems.length === 0) {
-      throw error;
+    if (fallbackArticles.length === 0) {
+      throw { source: source.name, message: error.message || "Feed request failed" };
     }
 
-    return fallbackItems;
+    return {
+      source: source.name,
+      articles: fallbackArticles,
+      diagnostic: buildSourceDiagnostic(source, fallbackArticles, { mode: "html-fallback" })
+    };
   }
 }
 
@@ -349,17 +484,15 @@ async function getAllArticles(forceRefresh = false) {
         cached: true,
         fetchedAt: new Date(cache.fetchedAt).toISOString(),
         sources: RSS_SOURCES.map((source) => source.name),
-        failedSources: cache.failedSources
+        failedSources: cache.failedSources,
+        sourceDiagnostics: cache.sourceDiagnostics
       }
     };
   }
 
-  const results = await Promise.allSettled(RSS_SOURCES.map(fetchSource));
-  const rawArticles = results
-    .filter((result) => result.status === "fulfilled")
-    .flatMap((result) => result.value)
-    .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
-
+  const results = await Promise.allSettled(RSS_SOURCES.map(fetchSourceBundle));
+  const successful = results.filter((result) => result.status === "fulfilled").map((result) => result.value);
+  const rawArticles = successful.flatMap((bundle) => bundle.articles).sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
   const articles = dedupeArticles(rawArticles);
   await enrichMissingImages(articles);
 
@@ -368,6 +501,18 @@ async function getAllArticles(forceRefresh = false) {
   cache.failedSources = results
     .map((result, index) => (result.status === "rejected" ? RSS_SOURCES[index].name : null))
     .filter(Boolean);
+  cache.sourceDiagnostics = RSS_SOURCES.map((source) => {
+    const bundle = successful.find((entry) => entry.source === source.name);
+    if (bundle) {
+      return bundle.diagnostic;
+    }
+
+    const rejected = results[RSS_SOURCES.findIndex((entry) => entry.name === source.name)];
+    return buildSourceDiagnostic(source, [], {
+      mode: "unavailable",
+      error: rejected?.reason?.message || "Unavailable"
+    });
+  });
 
   return {
     articles,
@@ -375,7 +520,8 @@ async function getAllArticles(forceRefresh = false) {
       cached: false,
       fetchedAt: new Date(cache.fetchedAt).toISOString(),
       sources: RSS_SOURCES.map((source) => source.name),
-      failedSources: cache.failedSources
+      failedSources: cache.failedSources,
+      sourceDiagnostics: cache.sourceDiagnostics
     }
   };
 }
@@ -389,13 +535,33 @@ function countBySource(articles) {
   );
 }
 
-function queryArticles(articles, { search = "", source = "All", page = 1, limit = 18 } = {}) {
+function filterByDateRange(articles, dateRange = "all") {
+  if (!dateRange || dateRange === "all") {
+    return articles;
+  }
+
+  const days = {
+    today: 1,
+    "3d": 3,
+    "7d": 7
+  }[dateRange];
+
+  if (!days) {
+    return articles;
+  }
+
+  const cutoff = Date.now() - (days * 24 * 60 * 60 * 1000);
+  return articles.filter((article) => new Date(article.publishedAt).getTime() >= cutoff);
+}
+
+function queryArticles(articles, { search = "", source = "All", page = 1, limit = 18, dateRange = "all" } = {}) {
   const normalizedSearch = String(search).trim().toLowerCase();
   const normalizedSource = String(source).trim();
   const safePage = Math.max(1, Number(page) || 1);
   const safeLimit = Math.min(50, Math.max(1, Number(limit) || 18));
 
-  const searched = articles.filter((article) => {
+  const byDate = filterByDateRange(articles, dateRange);
+  const searched = byDate.filter((article) => {
     const haystack = [article.title, article.description, article.source, article.relatedSources.join(" ")]
       .join(" ")
       .toLowerCase();
@@ -403,10 +569,7 @@ function queryArticles(articles, { search = "", source = "All", page = 1, limit 
   });
 
   const sourceCounts = countBySource(searched);
-
-  const filtered = searched.filter((article) => {
-    return !normalizedSource || normalizedSource === "All" || article.relatedSources.includes(normalizedSource);
-  });
+  const filtered = searched.filter((article) => !normalizedSource || normalizedSource === "All" || article.relatedSources.includes(normalizedSource));
 
   const start = (safePage - 1) * safeLimit;
   const pagedArticles = filtered.slice(start, start + safeLimit);
@@ -445,6 +608,7 @@ function clearCache() {
   cache.articles = [];
   cache.fetchedAt = 0;
   cache.failedSources = [];
+  cache.sourceDiagnostics = [];
 }
 
 module.exports = {
@@ -453,4 +617,3 @@ module.exports = {
   getAggregatedNews,
   clearCache
 };
-

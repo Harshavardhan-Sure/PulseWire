@@ -1,12 +1,12 @@
 const express = require("express");
 const path = require("path");
-const { getAggregatedNews, CACHE_TTL_MS, clearCache } = require("./rssService");
+const { getAggregatedNews, CACHE_TTL_MS, clearCache } = require("../server/rssService");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const clientDir = path.join(__dirname, "..", "client");
 
 app.use(express.json());
-app.use(express.static(path.join(__dirname, "..", "client")));
+app.use(express.static(clientDir));
 
 app.get("/api/news", async (req, res) => {
   try {
@@ -51,9 +51,7 @@ app.post("/api/news/refresh", async (req, res) => {
 });
 
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "..", "client", "index.html"));
+  res.sendFile(path.join(clientDir, "index.html"));
 });
 
-app.listen(PORT, () => {
-  console.log(`Tech News Aggregator running at http://localhost:${PORT}`);
-});
+module.exports = app;

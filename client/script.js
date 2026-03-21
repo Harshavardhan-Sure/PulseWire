@@ -58,11 +58,13 @@ const state = {
   failedSources: [],
   savedArticles: [],
   hiddenSources: [],
+  sourceDiagnostics: [],
   settings: {
     sort: "newest",
     cardsPerBatch: 18,
     stickySidebar: true,
-    showFeatured: true
+    showFeatured: true,
+    dateRange: "all"
   }
 };
 
@@ -95,6 +97,7 @@ const elements = {
   diagnosticsBtn: document.getElementById("diagnosticsBtn"),
   sortSelect: document.getElementById("sortSelect"),
   cardsPerBatchSelect: document.getElementById("cardsPerBatchSelect"),
+  dateRangeSelect: document.getElementById("dateRangeSelect"),
   stickySidebarToggle: document.getElementById("stickySidebarToggle"),
   showFeaturedToggle: document.getElementById("showFeaturedToggle"),
   openFeaturedBtn: document.getElementById("openFeaturedBtn"),
@@ -285,6 +288,10 @@ function hydrateFromUrl() {
     state.settings.sort = params.get("sort");
   }
 
+  if (params.get("dateRange")) {
+    state.settings.dateRange = params.get("dateRange");
+  }
+
   elements.searchInput.value = state.searchTerm;
 }
 
@@ -295,6 +302,7 @@ function syncUrl() {
   state.selectedSource !== "All" ? params.set("source", state.selectedSource) : params.delete("source");
   state.page > 1 ? params.set("page", String(state.page)) : params.delete("page");
   state.settings.sort !== "newest" ? params.set("sort", state.settings.sort) : params.delete("sort");
+  state.settings.dateRange !== "all" ? params.set("dateRange", state.settings.dateRange) : params.delete("dateRange");
 
   const nextUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ""}`;
   window.history.replaceState({}, "", nextUrl);
@@ -320,6 +328,7 @@ function updateControlButtons() {
 function applySettingsToUi() {
   elements.sortSelect.value = state.settings.sort;
   elements.cardsPerBatchSelect.value = String(state.settings.cardsPerBatch);
+  elements.dateRangeSelect.value = state.settings.dateRange;
   elements.stickySidebarToggle.checked = state.settings.stickySidebar;
   elements.showFeaturedToggle.checked = state.settings.showFeatured;
   document.body.classList.toggle("no-sticky-sidebar", !state.settings.stickySidebar);
@@ -602,6 +611,10 @@ function renderTrendingTopics() {
   });
 }
 
+function formatDiagnosticDate(value) {
+  return value ? formatDate(value) : "Not available";
+}
+
 function diagnosticsMarkup() {
   const activeSources = state.knownSources.length - state.hiddenSources.length - state.failedSources.length;
   const items = [
@@ -612,12 +625,50 @@ function diagnosticsMarkup() {
     [state.hiddenSources.length, "Hidden sources"]
   ];
 
+  const diagnosticsRows = state.sourceDiagnostics.length
+    ? state.sourceDiagnostics
+        .map((entry) => {
+          const isFailed = entry.mode === "unavailable";
+          const stateLabel = isFailed
+            ? "Unavailable"
+            : entry.mode === "html-fallback"
+              ? "Fallback"
+              : entry.mode === "rss+archive"
+                ? "RSS + archive"
+                : "RSS";
+          const sourceIcon = renderSourceIcon(entry.source, "diagnostics-source-icon");
+
+          return `
+            <article class="diagnostic-source-card${isFailed ? " diagnostic-source-card--failed" : ""}">
+              <div class="diagnostic-source-head">
+                <div class="diagnostic-source-title">${sourceIcon}<div><strong>${escapeHtml(entry.source)}</strong><span>${escapeHtml(stateLabel)}</span></div></div>
+                <span class="saved-count-pill diagnostic-source-count">${Number(entry.count || 0)}</span>
+              </div>
+              <div class="diagnostic-source-meta">
+                <span><strong>Newest:</strong> ${escapeHtml(formatDiagnosticDate(entry.newest))}</span>
+                <span><strong>Oldest:</strong> ${escapeHtml(formatDiagnosticDate(entry.oldest))}</span>
+                <span><strong>Archive backfill:</strong> ${Number(entry.archiveCount || 0)}</span>
+              </div>
+              ${entry.error ? `<p class="diagnostic-source-error">${escapeHtml(entry.error)}</p>` : ""}
+            </article>
+          `;
+        })
+        .join("")
+    : '<p class="state-inline">Source diagnostics will appear after the first feed load.</p>';
+
   return `
     <section>
       <p class="eyebrow">Feed details</p>
       <h2 id="modalTitle">Coverage snapshot</h2>
       <div class="diagnostics-grid">
         ${items.map(([value, label]) => `<div class="diagnostic-pill"><strong>${value}</strong><span>${label}</span></div>`).join("")}
+      </div>
+      <div class="diagnostics-sources">
+        <div class="saved-header">
+          <h3>Source depth</h3>
+          <span class="saved-count-pill">${state.sourceDiagnostics.length}</span>
+        </div>
+        <div class="diagnostic-source-list">${diagnosticsRows}</div>
       </div>
     </section>
   `;
@@ -655,7 +706,8 @@ function buildApiUrl({ page = state.page, refresh = false } = {}) {
     page: String(page),
     limit: String(state.limit),
     search: state.searchTerm,
-    source: state.selectedSource
+    source: state.selectedSource,
+    dateRange: state.settings.dateRange
   });
 
   if (refresh) {
@@ -714,6 +766,7 @@ async function loadNews({ append = false, pageOverride = null, refresh = false }
     state.fetchedAt = data.meta?.fetchedAt || "";
     state.sourceCounts = data.meta?.sourceCounts || {};
     state.failedSources = data.meta?.failedSources || [];
+    state.sourceDiagnostics = data.meta?.sourceDiagnostics || [];
     state.knownSources = data.meta?.sources || state.knownSources;
     state.page = Number(pagination.page) || state.page;
 
@@ -968,6 +1021,12 @@ elements.sortSelect.addEventListener("change", () => {
 elements.cardsPerBatchSelect.addEventListener("change", () => {
   state.settings.cardsPerBatch = Number(elements.cardsPerBatchSelect.value);
   state.limit = state.settings.cardsPerBatch;
+  saveState();
+  resetAndReload();
+});
+
+elements.dateRangeSelect.addEventListener("change", () => {
+  state.settings.dateRange = elements.dateRangeSelect.value;
   saveState();
   resetAndReload();
 });

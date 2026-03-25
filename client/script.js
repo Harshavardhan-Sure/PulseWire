@@ -615,8 +615,12 @@ function formatDiagnosticDate(value) {
   return value ? formatDate(value) : "Not available";
 }
 
+function isEnvironmentBlockedSource(entry) {
+  return Boolean(entry?.environmentNote);
+}
+
 function diagnosticsMarkup() {
-  const activeSources = state.knownSources.length - state.hiddenSources.length - state.failedSources.length;
+  const activeSources = state.knownSources.length - state.hiddenSources.length;
   const items = [
     [getVisibleArticles().length, "Loaded"],
     [activeSources, "Active sources"],
@@ -629,8 +633,10 @@ function diagnosticsMarkup() {
     ? state.sourceDiagnostics
         .map((entry) => {
           const isFailed = entry.mode === "unavailable";
-          const stateLabel = isFailed
-            ? "Unavailable"
+          const stateLabel = isEnvironmentBlockedSource(entry)
+            ? "Unavailable in this environment"
+            : isFailed
+              ? "Unavailable"
             : entry.mode === "html-fallback"
               ? "Fallback"
               : entry.mode === "rss+archive"
@@ -650,6 +656,7 @@ function diagnosticsMarkup() {
                 <span><strong>Archive backfill:</strong> ${Number(entry.archiveCount || 0)}</span>
               </div>
               ${entry.error ? `<p class="diagnostic-source-error">${escapeHtml(entry.error)}</p>` : ""}
+              ${entry.environmentNote ? `<p class="diagnostic-source-note">${escapeHtml(entry.environmentNote)}</p>` : ""}
             </article>
           `;
         })
@@ -768,11 +775,20 @@ async function loadNews({ append = false, pageOverride = null, refresh = false }
     state.failedSources = data.meta?.failedSources || [];
     state.sourceDiagnostics = data.meta?.sourceDiagnostics || [];
     state.knownSources = data.meta?.sources || state.knownSources;
+    if (state.selectedSource !== "All" && !state.knownSources.includes(state.selectedSource)) {
+      state.selectedSource = "All";
+    }
     state.page = Number(pagination.page) || state.page;
 
-    elements.feedStatus.textContent = state.failedSources.length
-      ? `Updated ${formatDate(state.fetchedAt)}. Some feeds were unavailable: ${state.failedSources.join(", ")}.`
-      : `Updated ${formatDate(state.fetchedAt)}${data.meta?.cached ? " from cache" : ""}.`;
+    const environmentBlockedSources = state.sourceDiagnostics
+      .filter(isEnvironmentBlockedSource)
+      .map((entry) => entry.source);
+
+    elements.feedStatus.textContent = environmentBlockedSources.length
+      ? `Updated ${formatDate(state.fetchedAt)}. Some feeds were unavailable in this environment: ${environmentBlockedSources.join(", ")}.`
+      : state.failedSources.length
+        ? `Updated ${formatDate(state.fetchedAt)}. Some feeds were unavailable: ${state.failedSources.join(", ")}.`
+        : `Updated ${formatDate(state.fetchedAt)}${data.meta?.cached ? " from cache" : ""}.`;
 
     renderCurrentView();
     syncUrl();

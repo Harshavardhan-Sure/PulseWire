@@ -50,6 +50,8 @@ const cache = {
   sourceDiagnostics: []
 };
 
+const IS_VERCEL = Boolean(process.env.VERCEL);
+
 const DEFAULT_HEADERS = {
   "User-Agent": parser.options.requestOptions.headers["User-Agent"],
   "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
@@ -469,8 +471,25 @@ function buildSourceDiagnostic(source, articles, extras = {}) {
     oldest: sorted[sorted.length - 1]?.publishedAt || "",
     mode: extras.mode || "rss",
     archiveCount: extras.archiveCount || 0,
-    error: extras.error || ""
+    error: extras.error || "",
+    environmentNote: extras.environmentNote || ""
   };
+}
+
+function isEnvironmentBlockedDiagnostic(diagnostic) {
+  return IS_VERCEL && diagnostic.mode === "unavailable" && /403|forbidden/i.test(diagnostic.error || "");
+}
+
+function filterSourcesForEnvironment(sourceDiagnostics = []) {
+  const blockedSources = new Set(
+    sourceDiagnostics
+      .filter(isEnvironmentBlockedDiagnostic)
+      .map((diagnostic) => diagnostic.source)
+  );
+
+  return RSS_SOURCES
+    .map((source) => source.name)
+    .filter((sourceName) => !blockedSources.has(sourceName));
 }
 
 async function fetchSourceBundle(source) {
@@ -554,7 +573,7 @@ async function getAllArticles(forceRefresh = false) {
       meta: {
         cached: true,
         fetchedAt: new Date(cache.fetchedAt).toISOString(),
-        sources: RSS_SOURCES.map((source) => source.name),
+        sources: filterSourcesForEnvironment(cache.sourceDiagnostics),
         failedSources: cache.failedSources,
         sourceDiagnostics: cache.sourceDiagnostics
       }
@@ -580,9 +599,12 @@ async function getAllArticles(forceRefresh = false) {
 
     const rejected = results[RSS_SOURCES.findIndex((entry) => entry.name === source.name)];
     return buildSourceDiagnostic(source, [], {
-      mode: "unavailable",
-      error: rejected?.reason?.message || "Unavailable"
-    });
+        mode: "unavailable",
+        error: rejected?.reason?.message || "Unavailable",
+        environmentNote: IS_VERCEL && /403|forbidden/i.test(rejected?.reason?.message || "")
+          ? "This source appears to block requests from the current hosting environment. It may still work locally."
+          : ""
+      });
   });
 
   return {
@@ -590,7 +612,7 @@ async function getAllArticles(forceRefresh = false) {
     meta: {
       cached: false,
       fetchedAt: new Date(cache.fetchedAt).toISOString(),
-      sources: RSS_SOURCES.map((source) => source.name),
+      sources: filterSourcesForEnvironment(cache.sourceDiagnostics),
       failedSources: cache.failedSources,
       sourceDiagnostics: cache.sourceDiagnostics
     }

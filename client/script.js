@@ -64,7 +64,8 @@ const state = {
     cardsPerBatch: 18,
     stickySidebar: true,
     showFeatured: true,
-    dateRange: "all"
+    dateRange: "all",
+    mutedKeywords: ""
   }
 };
 
@@ -98,6 +99,7 @@ const elements = {
   sortSelect: document.getElementById("sortSelect"),
   cardsPerBatchSelect: document.getElementById("cardsPerBatchSelect"),
   dateRangeSelect: document.getElementById("dateRangeSelect"),
+  muteKeywordsInput: document.getElementById("muteKeywordsInput"),
   stickySidebarToggle: document.getElementById("stickySidebarToggle"),
   showFeaturedToggle: document.getElementById("showFeaturedToggle"),
   openFeaturedBtn: document.getElementById("openFeaturedBtn"),
@@ -271,10 +273,12 @@ function loadPersistedState() {
     state.savedArticles = JSON.parse(sessionStorage.getItem("pulsewire-saved-articles") || "[]");
     const settings = JSON.parse(localStorage.getItem("pulsewire-settings") || "{}");
     state.settings = { ...state.settings, ...settings };
+    state.settings.mutedKeywords = typeof state.settings.mutedKeywords === "string" ? state.settings.mutedKeywords : "";
     state.limit = state.settings.cardsPerBatch;
   } catch {
     state.hiddenSources = [];
     state.savedArticles = [];
+    state.settings.mutedKeywords = "";
   }
 }
 
@@ -329,6 +333,7 @@ function applySettingsToUi() {
   elements.sortSelect.value = state.settings.sort;
   elements.cardsPerBatchSelect.value = String(state.settings.cardsPerBatch);
   elements.dateRangeSelect.value = state.settings.dateRange;
+  elements.muteKeywordsInput.value = state.settings.mutedKeywords;
   elements.stickySidebarToggle.checked = state.settings.stickySidebar;
   elements.showFeaturedToggle.checked = state.settings.showFeatured;
   document.body.classList.toggle("no-sticky-sidebar", !state.settings.stickySidebar);
@@ -376,6 +381,44 @@ function toggleSaveArticle(article) {
   }
 }
 
+function getMutedKeywordList() {
+  return state.settings.mutedKeywords
+    .split(",")
+    .map((keyword) => keyword.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function isArticleMuted(article) {
+  const keywords = getMutedKeywordList();
+
+  if (!keywords.length) {
+    return false;
+  }
+
+  const haystack = `${article.title} ${article.description} ${article.source}`.toLowerCase();
+  return keywords.some((keyword) => haystack.includes(keyword));
+}
+
+
+function getArticlePool() {
+  return Array.from(new Map([...state.featuredArticles, ...state.articles].map((article) => [article.id, article])).values());
+}
+
+function findRelatedCoverage(article) {
+  const tokenSet = new Set(tokenize(article.title).slice(0, 8));
+
+  return getArticlePool()
+    .filter((candidate) => candidate.id !== article.id && candidate.source !== article.source)
+    .map((candidate) => ({
+      article: candidate,
+      score: new Set(tokenize(`${candidate.title} ${candidate.description}`).filter((token) => tokenSet.has(token))).size
+    }))
+    .filter((entry) => entry.score >= 2)
+    .sort((a, b) => b.score - a.score || new Date(b.article.publishedAt) - new Date(a.article.publishedAt))
+    .slice(0, 4)
+    .map((entry) => entry.article);
+}
+
 function sortArticles(articles) {
   const sorted = [...articles];
 
@@ -397,11 +440,11 @@ function isArticleHidden(article) {
 }
 
 function getVisibleArticles() {
-  return sortArticles(state.articles.filter((article) => !isArticleHidden(article)));
+  return sortArticles(state.articles.filter((article) => !isArticleHidden(article) && !isArticleMuted(article)));
 }
 
 function getVisibleFeatured() {
-  return sortArticles(state.featuredArticles.filter((article) => !isArticleHidden(article))).slice(0, 4);
+  return sortArticles(state.featuredArticles.filter((article) => !isArticleHidden(article) && !isArticleMuted(article))).slice(0, 4);
 }
 
 function getFilteredArticles() {
@@ -539,17 +582,16 @@ function renderSourceRow(source, count, hidden = false) {
     return row;
   }
 
-  const { favicon } = getSourceMeta(source);
   row.innerHTML = `
     <button type="button" class="filter-chip${state.selectedSource === source ? " active" : ""}" ${hidden ? "disabled" : ""}>
       <span class="source-chip__main">${renderSourceIcon(source)}<span>${escapeHtml(source)}</span></span>
       <strong>${count}</strong>
     </button>
-    <button type="button" class="source-toggle-btn icon-button" aria-label="${hidden ? "Show source" : "Hide source"}" title="${hidden ? "Show source" : "Hide source"}">${iconMarkup(hidden ? "show" : "hide")}</button>
+    <button type="button" class="source-hide-btn source-toggle-btn icon-button" aria-label="${hidden ? "Show source" : "Hide source"}" title="${hidden ? "Show source" : "Hide source"}">${iconMarkup(hidden ? "show" : "hide")}</button>
   `;
 
   row.querySelector(".filter-chip").addEventListener("click", () => selectSource(source));
-  row.querySelector(".source-toggle-btn").addEventListener("click", () => toggleHiddenSource(source));
+  row.querySelector(".source-hide-btn").addEventListener("click", () => toggleHiddenSource(source));
   return row;
 }
 
@@ -621,39 +663,46 @@ function isEnvironmentBlockedSource(entry) {
 
 function diagnosticsMarkup() {
   const activeSources = state.knownSources.length - state.hiddenSources.length;
+  const blockedSources = state.sourceDiagnostics.filter(isEnvironmentBlockedSource).length;
   const items = [
     [getVisibleArticles().length, "Loaded"],
     [activeSources, "Active sources"],
     [state.failedSources.length, "Failed"],
-    [state.fetchedAt ? formatRelativeTime(state.fetchedAt) : "-", "Last refresh"],
-    [state.hiddenSources.length, "Hidden sources"]
+    [blockedSources, "Blocked on host"],
+    [state.fetchedAt ? formatRelativeTime(state.fetchedAt) : "-", "Last refresh"]
   ];
 
   const diagnosticsRows = state.sourceDiagnostics.length
     ? state.sourceDiagnostics
         .map((entry) => {
           const isFailed = entry.mode === "unavailable";
+          const healthLabel = entry.health || (isEnvironmentBlockedSource(entry) ? "blocked" : isFailed ? "failed" : entry.mode === "html-fallback" || entry.mode === "rss+archive" ? "degraded" : "healthy");
           const stateLabel = isEnvironmentBlockedSource(entry)
             ? "Unavailable in this environment"
             : isFailed
               ? "Unavailable"
-            : entry.mode === "html-fallback"
-              ? "Fallback"
-              : entry.mode === "rss+archive"
-                ? "RSS + archive"
-                : "RSS";
+              : entry.mode === "html-fallback"
+                ? "Fallback"
+                : entry.mode === "rss+archive"
+                  ? "RSS + archive"
+                  : "RSS";
           const sourceIcon = renderSourceIcon(entry.source, "diagnostics-source-icon");
 
           return `
             <article class="diagnostic-source-card${isFailed ? " diagnostic-source-card--failed" : ""}">
               <div class="diagnostic-source-head">
                 <div class="diagnostic-source-title">${sourceIcon}<div><strong>${escapeHtml(entry.source)}</strong><span>${escapeHtml(stateLabel)}</span></div></div>
-                <span class="saved-count-pill diagnostic-source-count">${Number(entry.count || 0)}</span>
+                <div class="diagnostic-source-actions">
+                  <span class="saved-count-pill diagnostic-health-pill diagnostic-health-pill--${escapeHtml(healthLabel)}">${escapeHtml(healthLabel)}</span>
+                  <span class="saved-count-pill diagnostic-source-count">${Number(entry.count || 0)}</span>
+                  <button class="text-button icon-button diagnostic-retry-btn" type="button" data-source="${escapeHtml(entry.source)}" aria-label="Retry source" title="Retry source">${iconMarkup("refresh")}</button>
+                </div>
               </div>
               <div class="diagnostic-source-meta">
                 <span><strong>Newest:</strong> ${escapeHtml(formatDiagnosticDate(entry.newest))}</span>
                 <span><strong>Oldest:</strong> ${escapeHtml(formatDiagnosticDate(entry.oldest))}</span>
                 <span><strong>Archive backfill:</strong> ${Number(entry.archiveCount || 0)}</span>
+                <span><strong>Last success:</strong> ${escapeHtml(formatDiagnosticDate(entry.lastSuccessAt || entry.checkedAt || ""))}</span>
               </div>
               ${entry.error ? `<p class="diagnostic-source-error">${escapeHtml(entry.error)}</p>` : ""}
               ${entry.environmentNote ? `<p class="diagnostic-source-note">${escapeHtml(entry.environmentNote)}</p>` : ""}
@@ -672,7 +721,7 @@ function diagnosticsMarkup() {
       </div>
       <div class="diagnostics-sources">
         <div class="saved-header">
-          <h3>Source depth</h3>
+          <h3>Source health</h3>
           <span class="saved-count-pill">${state.sourceDiagnostics.length}</span>
         </div>
         <div class="diagnostic-source-list">${diagnosticsRows}</div>
@@ -681,8 +730,36 @@ function diagnosticsMarkup() {
   `;
 }
 
+async function retrySource(source) {
+  elements.feedStatus.textContent = `Retrying ${source}...`;
+
+  try {
+    const response = await fetch("/api/news/source-refresh", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source })
+    });
+    const result = await response.json();
+
+    elements.feedStatus.textContent = result.ok
+      ? `${source} refreshed. Reloading the front page...`
+      : `${source} is still unavailable. ${result.diagnostic?.environmentNote || result.error || "Please try again later."}`;
+  } catch {
+    elements.feedStatus.textContent = `Unable to retry ${source} right now.`;
+  }
+
+  await reloadFeed({ refresh: true, preserveScroll: true });
+  openDiagnosticsModal();
+}
+
 function openDiagnosticsModal() {
   openModal(diagnosticsMarkup());
+  elements.modalContent.querySelectorAll(".diagnostic-retry-btn").forEach((button) => {
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      await retrySource(button.dataset.source || "");
+    });
+  });
 }
 
 function renderCardCollection(container, articles, createCard) {
@@ -828,16 +905,22 @@ async function hydratePagedState() {
   }
 }
 
-function resetAndReload({ refresh = false } = {}) {
+async function reloadFeed({ refresh = false, preserveScroll = false } = {}) {
   abortCurrentRequest();
-  scrollPageToTop();
+  if (!preserveScroll) {
+    scrollPageToTop();
+  }
   state.page = 1;
   state.hasMore = true;
   state.articles = [];
   state.featuredArticles = [];
   clearFeedDom();
   syncUrl();
-  loadNews({ refresh });
+  await loadNews({ refresh });
+}
+
+function resetAndReload({ refresh = false, preserveScroll = false } = {}) {
+  void reloadFeed({ refresh, preserveScroll });
 }
 
 function toggleSearchPanel(forceOpen = null) {
@@ -855,7 +938,11 @@ function openModal(markup) {
 }
 
 function openArticleModal(article) {
-  const { favicon } = getSourceMeta(article.source);
+  const relatedCoverage = findRelatedCoverage(article);
+  const sourceRollup = article.relatedSources?.length > 1
+    ? article.relatedSources.filter((source) => source !== article.source)
+    : [];
+
   openModal(`
     <article class="modal-article">
       ${article.image ? `<img class="modal-article__image" src="${article.image}" alt="${escapeHtml(article.title)}" />` : ""}
@@ -864,6 +951,18 @@ function openArticleModal(article) {
       <p class="modal-meta">${escapeHtml(articleMeta(article))}</p>
       <p class="modal-source">${renderSourceIcon(article.source)}<span>${escapeHtml(article.source)}</span></p>
       <p class="modal-description">${escapeHtml(article.description || "Open the article to read the full story.")}</p>
+      ${sourceRollup.length ? `<p class="modal-inline-note">Also carried by ${escapeHtml(sourceRollup.join(", "))}.</p>` : ""}
+      ${relatedCoverage.length ? `
+        <section class="modal-related">
+          <div class="saved-header">
+            <h3>Related coverage</h3>
+            <span class="saved-count-pill">${relatedCoverage.length}</span>
+          </div>
+          <div class="modal-related-list">
+            ${relatedCoverage.map((entry) => `<button class="saved-open modal-related-btn" type="button" data-id="${escapeHtml(entry.id)}">${escapeHtml(entry.source)}: ${escapeHtml(entry.title)}</button>`).join("")}
+          </div>
+        </section>
+      ` : ""}
       <div class="modal-actions">
         <button id="modalSaveBtn" class="text-button icon-button" type="button" data-article-id="${article.id}" aria-label="${isSaved(article.id) ? "Saved" : "Save for later"}" title="${isSaved(article.id) ? "Saved" : "Save for later"}">${iconMarkup(isSaved(article.id) ? "saved" : "save")}</button>
         <a class="news-card__link" href="${article.link}" target="_blank" rel="noopener noreferrer">Open original</a>
@@ -874,6 +973,15 @@ function openArticleModal(article) {
   document.getElementById("modalSaveBtn").addEventListener("click", () => {
     toggleSaveArticle(article);
     openArticleModal(article);
+  });
+
+  elements.modalContent.querySelectorAll(".modal-related-btn").forEach((button) => {
+    button.addEventListener("click", () => {
+      const nextArticle = getArticlePool().find((entry) => entry.id === button.dataset.id);
+      if (nextArticle) {
+        openArticleModal(nextArticle);
+      }
+    });
   });
 }
 
@@ -1045,6 +1153,12 @@ elements.dateRangeSelect.addEventListener("change", () => {
   state.settings.dateRange = elements.dateRangeSelect.value;
   saveState();
   resetAndReload();
+});
+
+elements.muteKeywordsInput.addEventListener("change", () => {
+  state.settings.mutedKeywords = elements.muteKeywordsInput.value;
+  saveState();
+  resetAndReload({ preserveScroll: true });
 });
 
 elements.stickySidebarToggle.addEventListener("change", () => {

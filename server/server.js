@@ -1,6 +1,6 @@
 const express = require("express");
 const path = require("path");
-const { getAggregatedNews, CACHE_TTL_MS, clearCache } = require("./rssService");
+const { getAggregatedNews, CACHE_TTL_MS, clearCache, refreshSourceByName } = require("./rssService");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -47,6 +47,22 @@ app.post("/api/news/refresh", async (req, res) => {
     });
   } catch {
     res.status(500).json({ ok: false, error: "Unable to refresh feeds right now." });
+  }
+});
+
+app.post("/api/news/source-refresh", async (req, res) => {
+  try {
+    const source = String(req.body?.source || "").trim();
+
+    if (!source) {
+      return res.status(400).json({ ok: false, error: "Source is required." });
+    }
+
+    const result = await refreshSourceByName(source);
+    clearCache();
+    return res.status(result.ok ? 200 : 502).json(result);
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: error.message || "Unable to refresh this source right now." });
   }
 });
 

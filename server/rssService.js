@@ -493,6 +493,8 @@ function filterSourcesForEnvironment(sourceDiagnostics = []) {
 }
 
 async function fetchSourceBundle(source) {
+  const checkedAt = new Date().toISOString();
+
   try {
     const feed = await parser.parseURL(source.url);
     const items = Array.isArray(feed.items) ? feed.items : [];
@@ -508,7 +510,8 @@ async function fetchSourceBundle(source) {
       articles: merged,
       diagnostic: buildSourceDiagnostic(source, merged, {
         mode: archiveArticles.length > 0 ? "rss+archive" : "rss",
-        archiveCount: archiveArticles.length
+        archiveCount: archiveArticles.length,
+        checkedAt
       })
     };
   } catch (error) {
@@ -562,6 +565,38 @@ function dedupeArticles(articles) {
   }
 
   return Array.from(clusters.values()).sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
+}
+
+async function refreshSourceByName(sourceName) {
+  const source = RSS_SOURCES.find((entry) => entry.name === sourceName);
+
+  if (!source) {
+    throw new Error("Unknown source");
+  }
+
+  try {
+    const bundle = await fetchSourceBundle(source);
+    return {
+      ok: true,
+      source: source.name,
+      diagnostic: bundle.diagnostic,
+      articleCount: bundle.articles.length
+    };
+  } catch (error) {
+    const message = error?.message || "Source refresh failed";
+    return {
+      ok: false,
+      source: source.name,
+      diagnostic: buildSourceDiagnostic(source, [], {
+        mode: "unavailable",
+        error: message,
+        environmentNote: IS_VERCEL && /403|forbidden/i.test(message)
+          ? "This source appears to block requests from the current hosting environment. It may still work locally."
+          : ""
+      }),
+      articleCount: 0
+    };
+  }
 }
 
 async function getAllArticles(forceRefresh = false) {
@@ -708,5 +743,6 @@ module.exports = {
   CACHE_TTL_MS,
   RSS_SOURCES,
   getAggregatedNews,
-  clearCache
+  clearCache,
+  refreshSourceByName
 };

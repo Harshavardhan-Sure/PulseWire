@@ -15,7 +15,10 @@ const SOURCE_META = {
   "9to5Mac": { favicon: "https://9to5mac.com/favicon.ico" },
   "It's FOSS": { favicon: "https://itsfoss.com/favicon.ico" },
   "MakeUseOf": { favicon: "https://www.makeuseof.com/favicon.ico" },
-  "Digital Trends": { favicon: "https://www.digitaltrends.com/favicon.ico" }
+  "Digital Trends": { favicon: "https://www.digitaltrends.com/favicon.ico" },
+  "MIT Technology Review": { favicon: "https://www.technologyreview.com/favicon.ico" },
+  "The Register": { favicon: "https://www.theregister.com/favicon.ico" },
+  "Slashdot": { favicon: "https://slashdot.org/favicon.ico" }
 };
 
 const SOURCE_PALETTE = {
@@ -34,7 +37,10 @@ const SOURCE_PALETTE = {
   "Techmeme": ["#ffd48e", "#ec6235"],
   "It's FOSS": ["#7ef0ff", "#2956ff"],
   "MakeUseOf": ["#ffd7a6", "#ff8757"],
-  "Digital Trends": ["#b8c9ff", "#446cff"]
+  "Digital Trends": ["#b8c9ff", "#446cff"],
+  "MIT Technology Review": ["#ffcdb6", "#ff6f3c"],
+  "The Register": ["#b7ffd4", "#1b8f56"],
+  "Slashdot": ["#d6dcff", "#5671ff"]
 };
 
 const TREND_STOP_WORDS = new Set([
@@ -600,7 +606,7 @@ function renderMobileSourceSelect() {
     `<option value="All">All (${getVisibleArticles().length})</option>`, 
     ...state.knownSources
       .filter((source) => !state.hiddenSources.includes(source))
-      .map((source) => `<option value="${escapeHtml(source)}">${escapeHtml(source)} (${Number(state.sourceCounts[source] || 0)})</option>`)
+      .map((source) => `<option value="${escapeHtml(source)}">${escapeHtml(source)} (${Number(state.sourceCounts[source] || 0)})</option>` )
   ];
 
   elements.sourceSelect.innerHTML = options.join("");
@@ -638,7 +644,7 @@ function renderTrendingTopics() {
       ? topics
           .map(
             ([topic, count]) =>
-              `<button type="button" class="trend-chip" data-topic="${escapeHtml(topic)}">${escapeHtml(topic)} <strong>${count}</strong></button>`
+              `<button type="button" class="trend-chip" data-topic="${escapeHtml(topic)}">${escapeHtml(topic)} <strong>${count}</strong></button>` 
           )
           .join("")
       : '<p class="state-inline">No strong topic clusters yet.</p>'
@@ -1212,6 +1218,8 @@ if (state.searchTerm) {
 }
 observer.observe(elements.scrollSentinel);
 hydratePagedState();
+
+
 
 
 

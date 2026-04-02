@@ -40,7 +40,10 @@ const RSS_SOURCES = [
   { name: "9to5Mac", url: "https://9to5mac.com/feed/" },
   { name: "It's FOSS", url: "https://itsfoss.com/feed/" },
   { name: "MakeUseOf", url: "https://www.makeuseof.com/feed/" },
-  { name: "Digital Trends", url: "https://www.digitaltrends.com/feed/" }
+  { name: "Digital Trends", url: "https://www.digitaltrends.com/feed/" },
+  { name: "MIT Technology Review", url: "https://www.technologyreview.com/feed/" },
+  { name: "The Register", url: "https://www.theregister.com/headlines.atom" },
+  { name: "Slashdot", url: "http://rss.slashdot.org/Slashdot/slashdotMain" }
 ];
 
 const cache = {
